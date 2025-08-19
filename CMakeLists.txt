@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.15)
 project(chatgpt_cli C)
 
 set(CMAKE_C_STANDARD 17)
@@ -10,4 +10,6 @@ add_executable(chatgpt_cli main.c
         main.h
         openai-wrapper.c
         openai-wrapper.h)
-target_link_libraries(chatgpt_cli PRIVATE CURL::libcurl ${JSONC_LIB})
+target_link_libraries(chatgpt_cli PRIVATE
+        CURL::libcurl
+        ${JSONC_LIB})

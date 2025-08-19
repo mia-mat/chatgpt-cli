@@ -15,11 +15,15 @@ typedef struct {
 } openai_request;
 
 typedef struct {
-    const char* output;
-    const char* error;
+    char* raw_response;
+    char* output;
+    char* error;
 } openai_response;
 
+void openai_request_free(openai_request *request);
+void openai_response_free(openai_response *response);
 
-const char* getResponseOutputText(json_object* responseJson);
-openai_response* generateResponse(openai_request* request);
+const openai_response* create_response_object(const char* curl_response);
+
+const openai_response* generate_response(openai_request* request);
 #endif //CHATGPT_CLI_OPENAI_WRAPPER_H
