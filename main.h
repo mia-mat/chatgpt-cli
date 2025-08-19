@@ -6,5 +6,5 @@
 #define CHATGPT_CLI_MAIN_H
 #include "openai-wrapper.h"
 
-openai_request* generate_request_from_options(int argc, char* argv[]);
+openai_request* openai_generate_request_from_options(int argc, char* argv[]);
 #endif //CHATGPT_CLI_MAIN_H

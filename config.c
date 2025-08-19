@@ -1,0 +1,143 @@
+//
+// Created by mia on 19/08/2025.
+//
+
+#include "config.h"
+
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+char* chatgpt_cli_config_get_path() {
+	char* path = NULL;
+
+#ifdef _WIN32 // C:\Users\user\Appdata\Local\chatgpt-cli\config
+	char* user = getenv("USERPROFILE");
+	if (!user) {
+		fprintf(stderr, "Could not find config save location");
+		exit(1);
+	}
+
+	const char* subdir = "\\AppData\\Local\\chatgpt-cli\\config";
+	size_t len = strlen(user) + strlen(subdir) + 1;
+	path = malloc(len);
+	snprintf(path, len, "%s%s", user, subdir);
+
+#else
+	// ~/.config/chatgpt-cli.conf
+	char* home = getenv("HOME");
+	if (!home) {
+		fprintf(stderr, "Could not find config save location");
+		exit(1);
+	}
+
+	const char* subdir = "/.config/chatgpt-cli.conf";
+	size_t len = strlen(home) + strlen(subdir) + 1;
+	path = malloc(len);
+	snprintf(path, len, "%s%s", home, subdir);
+
+#endif
+
+	return path;
+}
+
+char* chatgpt_cli_config_read_value(const char* key) {
+	char* config_path = chatgpt_cli_config_get_path();
+
+	FILE* config_file = fopen(config_path, "rb");
+	free(config_path);
+
+	if (!config_file) {
+		return NULL;
+	}
+
+	// formatted as KEY=VALUE pairs on lines
+
+	fseek(config_file, 0, SEEK_END);
+	size_t file_length = ftell(config_file);
+	fseek(config_file, 0, SEEK_SET); // back to start
+
+	char* config_content = malloc(file_length + 1);
+	fread(config_content, sizeof(char), file_length, config_file);
+
+	fclose(config_file);
+
+	if (!config_content) {
+		return NULL;
+	}
+
+	config_content[file_length] = '\0'; // fread doesn't automatically null-terminate
+
+	// reset per-line and depending on if we're reading the key or value.
+	char* current_part = malloc(1);
+	current_part[0] = '\0';
+	size_t current_part_length = 0;
+
+	bool equals_seen = false; // has an = been seen on the current line (are we writing to key or value)
+	bool key_found = false; // if the current value is being assigned to the key which we want to read from
+
+	for (int i = 0; i < file_length; i++) {
+		char current_char = config_content[i];
+		if (current_char == '\n') {
+			if (key_found) break;
+
+			// reset current part
+			current_part = strdup("");
+			current_part_length = 0;
+
+			equals_seen = false;
+
+			continue;
+		}
+
+		if (current_char == '=' && !equals_seen) {
+			equals_seen = true;
+
+			// check for match
+			if(strcmp(current_part, key) == 0) {
+				key_found = true;
+			}
+
+			// reset current part
+			current_part = strdup("");
+			current_part_length = 0;
+
+			continue;
+		}
+
+		// input is going onto a new line, continue
+		if (current_char == '|' && equals_seen &&
+			((file_length > i+1 && config_content[i+1] == '\n')
+			|| (file_length > i+2 && config_content[i+1] == '\r' && config_content[i+2] == '\n'))) {
+			i++; // skip newline character
+			if (config_content[i] == '\r') i++; // extra skip for windows because \r\n
+			continue;
+		}
+
+
+		if (!key_found && equals_seen) {
+			// writing to this value would be pointless
+			continue;
+		}
+
+		current_part = realloc(current_part, current_part_length+2);
+		current_part[current_part_length] = config_content[i];
+		current_part[current_part_length+1] = '\0';
+		current_part_length++;
+
+	}
+
+	free(config_content);
+
+	if (!key_found) {
+		free(current_part); // contains some un-needed key or value
+		return NULL;
+	}
+
+	return current_part;
+}

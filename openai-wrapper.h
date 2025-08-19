@@ -23,7 +23,7 @@ typedef struct {
 void openai_request_free(openai_request* request);
 void openai_response_free(openai_response* response);
 
-openai_response* create_response_object(const char* curl_response);
+openai_response* openai_create_response_object(const char* curl_response);
 
-openai_response* generate_response(openai_request* request);
+openai_response* openai_generate_response(openai_request* request);
 #endif //CHATGPT_CLI_OPENAI_WRAPPER_H

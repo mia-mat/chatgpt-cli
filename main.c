@@ -5,16 +5,18 @@
 #include <getopt.h>
 #include <string.h>
 
+#include "config.h"
 #include "openai-wrapper.h"
 #include "curl/curl.h"
 
 #define ENV_API_KEY "CHATGPT_CLI_API_KEY"
-#define ENV_SYSTEM_PROMPT "CHATGPT_CLI_SYSTEM_PROMPT"
 
 int main(int argc, char* argv[]) {
-	openai_request* request = generate_request_from_options(argc, argv);
 
-	openai_response* response = generate_response(request);
+
+	openai_request* request = openai_generate_request_from_options(argc, argv);
+
+	openai_response* response = openai_generate_response(request);
 
 	if (response->error != NULL) {
 		printf("Error: %s\n", response->error);
@@ -39,26 +41,22 @@ int main(int argc, char* argv[]) {
 }
 
 
-openai_request* generate_request_from_options(int argc, char* argv[]) {
+openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 	openai_request* retRequest = malloc(sizeof(openai_request));
-
-	retRequest->model = NULL;
 
 	if (getenv(ENV_API_KEY)) {
 		retRequest->api_key = strdup(getenv(ENV_API_KEY));
 	} else retRequest->api_key = NULL;
 
-	if (getenv(ENV_SYSTEM_PROMPT)) {
-		retRequest->instructions = strdup(getenv(ENV_SYSTEM_PROMPT));
-	} else {
-		retRequest->instructions = NULL;
-	}
+	// fine if NULL
+	retRequest->model = chatgpt_cli_config_read_value("model");
+	retRequest->instructions = chatgpt_cli_config_read_value("instructions");
 
-	char* prompt = strdup("\0");
+	char* prompt = strdup("");
 
 	const struct option long_options[] = {
 		{"model", required_argument, 0, 'm'},
-		{"apiKey", required_argument, 0, 'k'},
+		{"key", required_argument, 0, 'k'},
 		{"instructions", required_argument, 0, 'i'},
 		{"raw", no_argument, 0, 'r'},
 		{0, 0, 0, 0}
@@ -82,12 +80,14 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 		}
 	}
 	if (!retRequest->model) {
-		fprintf(stderr, "Model not provided. Specify with --model\n");
+		char* config_path = chatgpt_cli_config_get_path();
+		fprintf(stderr, "Model not provided. Specify with --model or in %s\n", config_path);
+		free(config_path);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!retRequest->api_key) {
-		fprintf(stderr, "OpenAI API key not provided. Specify with %s environment variable or --apiKey\n",
+		fprintf(stderr, "OpenAI API key not provided. Specify with %s environment variable or --key\n",
 		        ENV_API_KEY);
 		exit(EXIT_FAILURE);
 	}

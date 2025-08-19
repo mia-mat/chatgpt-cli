@@ -39,7 +39,7 @@ size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elem
 	return chunkSize;
 }
 
-openai_response* generate_response(openai_request* request) {
+openai_response* openai_generate_response(openai_request* request) {
 	// only used if CURL errors before we properly generate a response
 	openai_response* fallback_response = malloc(sizeof(openai_response));
 	fallback_response->output_text = NULL;
@@ -93,10 +93,10 @@ openai_response* generate_response(openai_request* request) {
 
 	curl_easy_cleanup(curl);
 
-	return create_response_object(response_string);
+	return openai_create_response_object(response_string);
 }
 
-openai_response* create_response_object(const char* curl_response) {
+openai_response* openai_create_response_object(const char* curl_response) {
 	openai_response* func_response = malloc(sizeof(openai_response));
 	func_response->raw_response = strdup(curl_response);
 	func_response->error = NULL;
