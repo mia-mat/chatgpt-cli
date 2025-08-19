@@ -24,19 +24,19 @@ void openai_response_free(openai_response* response) {
 
 // returns num. bytes handled
 size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elements, char** data) {
-	size_t chunkSize = size_atomic * n_elements;
+	size_t chunk_size = size_atomic * n_elements;
 
 	// data holds the address of our char* data
 	// so dereference for char*
-	*data = realloc(*data, strlen(*data) + chunkSize + 1); // +1 for null-terminator
+	*data = realloc(*data, strlen(*data) + chunk_size + 1); // +1 for null-terminator
 	if (*data == NULL) {
 		fprintf(stderr, "Memory allocation failed!\n");
 		return 0;
 	}
 
-	strncat(*data, content_ptr, chunkSize);
+	strncat(*data, content_ptr, chunk_size);
 
-	return chunkSize;
+	return chunk_size;
 }
 
 openai_response* openai_generate_response(openai_request* request) {

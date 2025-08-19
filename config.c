@@ -9,10 +9,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 char* chatgpt_cli_config_get_path() {
 	char* path = NULL;
 
@@ -83,10 +79,13 @@ char* chatgpt_cli_config_read_value(const char* key) {
 
 	for (int i = 0; i < file_length; i++) {
 		char current_char = config_content[i];
+		if (current_char == '\r') continue;
+
 		if (current_char == '\n') {
 			if (key_found) break;
 
 			// reset current part
+			free(current_part);
 			current_part = strdup("");
 			current_part_length = 0;
 
@@ -104,6 +103,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 			}
 
 			// reset current part
+			free(current_part);
 			current_part = strdup("");
 			current_part_length = 0;
 
