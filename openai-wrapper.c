@@ -9,10 +9,10 @@
 #include <string.h>
 
 void openai_request_free(openai_request* request) {
-	free(request->apiKey);
+	free(request->api_key);
 	free(request->input);
 	free(request->model);
-	free(request->systemPrompt);
+	free(request->instructions);
 	free(request);
 }
 
@@ -57,9 +57,9 @@ openai_response* generate_response(openai_request* request) {
 	list = curl_slist_append(list, "Content-Type: application/json");
 
 	char* auth_prefix = "Authorization: Bearer ";
-	char* auth_header = malloc(1 + strlen(auth_prefix) + strlen(request->apiKey));
+	char* auth_header = malloc(1 + strlen(auth_prefix) + strlen(request->api_key));
 	strcpy(auth_header, auth_prefix);
-	strcat(auth_header, request->apiKey);
+	strcat(auth_header, request->api_key);
 	list = curl_slist_append(list, auth_header);
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
@@ -68,8 +68,8 @@ openai_response* generate_response(openai_request* request) {
 
 	json_object_object_add(json_request_data, "model", json_object_new_string(request->model));
 	json_object_object_add(json_request_data, "input", json_object_new_string(request->input));
-	if (request->systemPrompt != NULL) {
-		json_object_object_add(json_request_data, "instructions", json_object_new_string(request->systemPrompt));
+	if (request->instructions != NULL) {
+		json_object_object_add(json_request_data, "instructions", json_object_new_string(request->instructions));
 	}
 
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string(json_request_data));

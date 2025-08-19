@@ -7,10 +7,10 @@
 #include <stdbool.h>
 
 typedef struct {
-	char* systemPrompt;
+	char* instructions;
 	char* input;
 	char* model;
-	char* apiKey;
+	char* api_key;
 	bool raw;
 } openai_request;
 

@@ -12,17 +12,9 @@
 #define ENV_SYSTEM_PROMPT "CHATGPT_CLI_SYSTEM_PROMPT"
 
 int main(int argc, char* argv[]) {
-	free(0);
-	// options for
-	// --model
-	// --key: api key
-	// eventually -s for search
-	// --raw for raw response (full json)
 	openai_request* request = generate_request_from_options(argc, argv);
 
 	openai_response* response = generate_response(request);
-
-
 
 	if (response->error != NULL) {
 		printf("Error: %s\n", response->error);
@@ -53,13 +45,13 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 	retRequest->model = NULL;
 
 	if (getenv(ENV_API_KEY)) {
-		retRequest->apiKey = strdup(getenv(ENV_API_KEY));
-	} else retRequest->apiKey = NULL;
+		retRequest->api_key = strdup(getenv(ENV_API_KEY));
+	} else retRequest->api_key = NULL;
 
 	if (getenv(ENV_SYSTEM_PROMPT)) {
-		retRequest->systemPrompt = strdup(getenv(ENV_SYSTEM_PROMPT));
+		retRequest->instructions = strdup(getenv(ENV_SYSTEM_PROMPT));
 	} else {
-		retRequest->systemPrompt = NULL;
+		retRequest->instructions = NULL;
 	}
 
 	char* prompt = strdup("\0");
@@ -67,22 +59,22 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 	const struct option long_options[] = {
 		{"model", required_argument, 0, 'm'},
 		{"apiKey", required_argument, 0, 'k'},
-		{"system", required_argument, 0, 's'},
+		{"instructions", required_argument, 0, 'i'},
 		{"raw", no_argument, 0, 'r'},
 		{0, 0, 0, 0}
 	};
 
 	int opt; // usually a char, the current option. (with arg optarg)
-	while ((opt = getopt_long(argc, argv, "m:k:s:r", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "m:k:i:r", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'm':
 			retRequest->model = strdup(optarg);
 			break;
 		case 'k':
-			retRequest->apiKey = strdup(optarg);
+			retRequest->api_key = strdup(optarg);
 			break;
-		case 's':
-			retRequest->systemPrompt = strdup(optarg);
+		case 'i':
+			retRequest->instructions = strdup(optarg);
 			break;
 		case 'r':
 			retRequest->raw = true;
@@ -94,7 +86,7 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (!retRequest->apiKey) {
+	if (!retRequest->api_key) {
 		fprintf(stderr, "OpenAI API key not provided. Specify with %s environment variable or --apiKey\n",
 		        ENV_API_KEY);
 		exit(EXIT_FAILURE);
