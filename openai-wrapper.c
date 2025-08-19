@@ -8,7 +8,7 @@
 #include <json-c/json.h>
 #include <string.h>
 
-void openai_request_free(openai_request *request) {
+void openai_request_free(openai_request* request) {
 	free(request->apiKey);
 	free(request->input);
 	free(request->model);
@@ -16,9 +16,9 @@ void openai_request_free(openai_request *request) {
 	free(request);
 }
 
-void openai_response_free(openai_response *response) {
+void openai_response_free(openai_response* response) {
 	free(response->error);
-	free(response->output);
+	free(response->output_text);
 	free(response);
 }
 
@@ -39,13 +39,16 @@ size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elem
 	return chunkSize;
 }
 
-const openai_response* generate_response(openai_request* request) {
-	openai_response *func_response = malloc(sizeof(openai_response));
+openai_response* generate_response(openai_request* request) {
+	// only used if CURL errors before we properly generate a response
+	openai_response* fallback_response = malloc(sizeof(openai_response));
+	fallback_response->output_text = NULL;
+	fallback_response->raw_response = NULL;
 
 	CURL* curl = curl_easy_init();
 	if (!curl) {
-		func_response->error = strdup("Could not initialize CURL");
-		return func_response;
+		fallback_response->error = strdup("Could not initialize CURL");
+		return fallback_response;
 	}
 
 	curl_easy_setopt(curl, CURLOPT_URL, "https://api.openai.com/v1/responses");
@@ -65,6 +68,9 @@ const openai_response* generate_response(openai_request* request) {
 
 	json_object_object_add(json_request_data, "model", json_object_new_string(request->model));
 	json_object_object_add(json_request_data, "input", json_object_new_string(request->input));
+	if (request->systemPrompt != NULL) {
+		json_object_object_add(json_request_data, "instructions", json_object_new_string(request->systemPrompt));
+	}
 
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string(json_request_data));
 
@@ -81,20 +87,20 @@ const openai_response* generate_response(openai_request* request) {
 	json_object_put(json_request_data);
 
 	if (curl_response != CURLE_OK) {
-		func_response->error = strdup(curl_easy_strerror(curl_response));
-		return func_response;
+		fallback_response->error = strdup(curl_easy_strerror(curl_response));
+		return fallback_response;
 	}
 
 	curl_easy_cleanup(curl);
 
-	printf("%s\n", response_string);
-
 	return create_response_object(response_string);
 }
 
-const openai_response* create_response_object(const char* curl_response) {
-	openai_response *func_response = malloc(sizeof(openai_response));
+openai_response* create_response_object(const char* curl_response) {
+	openai_response* func_response = malloc(sizeof(openai_response));
 	func_response->raw_response = strdup(curl_response);
+	func_response->error = NULL;
+	func_response->output_text = NULL;
 
 	json_object* response_json = json_tokener_parse(curl_response);
 	// response_json *should be* structured as
@@ -105,7 +111,8 @@ const openai_response* create_response_object(const char* curl_response) {
 	// check for any errors first
 	json_object* error = json_object_object_get(response_json, "error");
 	if (error != NULL) {
-		func_response->error = strdup(json_object_get_string( json_object_object_get(error, "message")));
+		func_response->error = strdup(json_object_get_string(json_object_object_get(error, "message")));
+		json_object_put(response_json);
 		return func_response;
 	}
 
@@ -113,6 +120,7 @@ const openai_response* create_response_object(const char* curl_response) {
 
 	if (output_array == NULL) { // ?
 		func_response->error = strdup("Malformed JSON response");
+		json_object_put(response_json);
 		return func_response;
 	}
 
@@ -134,6 +142,7 @@ const openai_response* create_response_object(const char* curl_response) {
 
 	if (content_array == NULL) {
 		func_response->error = strdup("Malformed JSON response");
+		json_object_put(response_json);
 		return func_response;
 	}
 
@@ -153,12 +162,12 @@ const openai_response* create_response_object(const char* curl_response) {
 
 	if (json_output_text == NULL) {
 		func_response->error = strdup("Malformed JSON response");
+		json_object_put(response_json);
 		return func_response;
 	}
 
-	func_response->output = strdup(json_object_get_string(json_output_text));
+	func_response->output_text = strdup(json_object_get_string(json_output_text));
 
 	json_object_put(response_json);
 	return func_response;
 }
-

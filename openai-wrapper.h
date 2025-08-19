@@ -4,26 +4,26 @@
 
 #ifndef CHATGPT_CLI_OPENAI_WRAPPER_H
 #define CHATGPT_CLI_OPENAI_WRAPPER_H
-#include <json-c/json_object.h>
-
+#include <stdbool.h>
 
 typedef struct {
-    char* systemPrompt;
-    char* input;
-    char* model;
-    char* apiKey;
+	char* systemPrompt;
+	char* input;
+	char* model;
+	char* apiKey;
+	bool raw;
 } openai_request;
 
 typedef struct {
-    char* raw_response;
-    char* output;
-    char* error;
+	char* raw_response;
+	char* output_text;
+	char* error;
 } openai_response;
 
-void openai_request_free(openai_request *request);
-void openai_response_free(openai_response *response);
+void openai_request_free(openai_request* request);
+void openai_response_free(openai_response* response);
 
-const openai_response* create_response_object(const char* curl_response);
+openai_response* create_response_object(const char* curl_response);
 
-const openai_response* generate_response(openai_request* request);
+openai_response* generate_response(openai_request* request);
 #endif //CHATGPT_CLI_OPENAI_WRAPPER_H

@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
 	openai_response* response = generate_response(request);
 
-	openai_request_free(request);
+
 
 	if (response->error != NULL) {
 		printf("Error: %s\n", response->error);
@@ -30,8 +30,17 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	printf("%s\n", response->output);
+	char* consoleResponse;
 
+	if (request->raw) {
+		consoleResponse = response->raw_response;
+	} else {
+		consoleResponse = response->output_text;
+	}
+
+	printf("%s\n", consoleResponse);
+
+	openai_request_free(request);
 	openai_response_free(response);
 
 	return 0;
@@ -45,13 +54,11 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 
 	if (getenv(ENV_API_KEY)) {
 		retRequest->apiKey = strdup(getenv(ENV_API_KEY));
-	}
-	else retRequest->apiKey = NULL;
+	} else retRequest->apiKey = NULL;
 
 	if (getenv(ENV_SYSTEM_PROMPT)) {
 		retRequest->systemPrompt = strdup(getenv(ENV_SYSTEM_PROMPT));
-	}
-	else {
+	} else {
 		retRequest->systemPrompt = NULL;
 	}
 
@@ -61,11 +68,12 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 		{"model", required_argument, 0, 'm'},
 		{"apiKey", required_argument, 0, 'k'},
 		{"system", required_argument, 0, 's'},
+		{"raw", no_argument, 0, 'r'},
 		{0, 0, 0, 0}
 	};
 
 	int opt; // usually a char, the current option. (with arg optarg)
-	while ((opt = getopt_long(argc, argv, "m:k:s:", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "m:k:s:r", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'm':
 			retRequest->model = strdup(optarg);
@@ -75,6 +83,9 @@ openai_request* generate_request_from_options(int argc, char* argv[]) {
 			break;
 		case 's':
 			retRequest->systemPrompt = strdup(optarg);
+			break;
+		case 'r':
+			retRequest->raw = true;
 			break;
 		}
 	}
