@@ -52,7 +52,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 		return NULL;
 	}
 
-	// formatted as KEY=VALUE pairs on lines
+	// formatted as KEY=VALUE pairs on lines, with | to go onto next line
 
 	fseek(config_file, 0, SEEK_END);
 	size_t file_length = ftell(config_file);
@@ -125,7 +125,13 @@ char* chatgpt_cli_config_read_value(const char* key) {
 			continue;
 		}
 
-		current_part = realloc(current_part, current_part_length+2);
+		char* new_current_part = realloc(current_part, current_part_length+2);
+		if (new_current_part == NULL) {
+			fprintf(stderr, "Memory allocation failed!\n");
+			free(current_part);
+			exit(EXIT_FAILURE);
+		}
+		current_part = new_current_part;
 		current_part[current_part_length] = config_content[i];
 		current_part[current_part_length+1] = '\0';
 		current_part_length++;

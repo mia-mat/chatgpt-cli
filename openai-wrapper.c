@@ -23,7 +23,7 @@ void openai_response_free(openai_response* response) {
 }
 
 // returns num. bytes handled
-size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elements, char** data) {
+static size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elements, char** data) {
 	size_t chunk_size = size_atomic * n_elements;
 
 	// data holds the address of our char* data
@@ -31,7 +31,7 @@ size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elem
 	*data = realloc(*data, strlen(*data) + chunk_size + 1); // +1 for null-terminator
 	if (*data == NULL) {
 		fprintf(stderr, "Memory allocation failed!\n");
-		return 0;
+		exit(EXIT_FAILURE);
 	}
 
 	strncat(*data, content_ptr, chunk_size);
@@ -116,22 +116,21 @@ openai_response* openai_create_response_object(const char* curl_response) {
 		return func_response;
 	}
 
-	json_object* output_array = json_object_object_get(response_json, "output");
+	const json_object* output_array = json_object_object_get(response_json, "output");
 
-	if (output_array == NULL) { // ?
+	if (output_array == NULL) {
 		func_response->error = strdup("Malformed JSON response");
 		json_object_put(response_json);
 		return func_response;
 	}
 
-	json_object* content_array = NULL;
+	const json_object* content_array = NULL;
 
 	// loop through output array to find content which is of type 'message'
 	// (i.e. has the actual content we're looking for)
 	for (int i = 0; i < json_object_array_length(output_array); i++) {
 		json_object* output_array_element = json_object_array_get_idx(output_array, i);
 		json_object* type = json_object_object_get(output_array_element, "type");
-
 
 		if (type == NULL || strcmp(json_object_get_string(type), "message") != 0) {
 			continue;
