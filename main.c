@@ -117,12 +117,14 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 		char* config_path = chatgpt_cli_config_get_path();
 		fprintf(stderr, "Model not provided. Specify with --model or in %s\n", config_path);
 		free(config_path);
+		free(func_request);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!func_request->api_key) {
 		fprintf(stderr, "OpenAI API key not provided. Specify with %s environment variable or --key\n",
 		        ENV_API_KEY);
+		free(func_request);
 		exit(EXIT_FAILURE);
 	}
 
@@ -146,6 +148,12 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 		if (i != argc - 1) {
 			strcat(prompt, " "); // alloc space
 		}
+	}
+
+	if (prompt[0] == '\0') {
+		fprintf(stderr, "Prompt not specified. Use --help for usage.\n");
+		free(func_request);
+		exit(EXIT_FAILURE);
 	}
 
 	func_request->input = prompt;
