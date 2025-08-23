@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(chatgpt_cli
-        VERSION 1.2.1
+        VERSION 1.2.2
         LANGUAGES C)
 
 configure_file(

@@ -56,6 +56,7 @@ int main(int argc, char* argv[]) {
 		printf("Error: %s", error);
 		exit(EXIT_FAILURE);
 	}
+	printf("\n");
 
 	openai_request_free(request);
 
@@ -110,7 +111,7 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 			break;
 		case 'v':
 			openai_request_free(func_request);
-			printf("chatgpt-cli %s\ncreated by mia <3", PROJECT_VERSION_STRING);
+			printf("chatgpt-cli %s\ncreated by mia <3\n", PROJECT_VERSION_STRING);
 			exit(EXIT_SUCCESS);
 			break;
 		}
