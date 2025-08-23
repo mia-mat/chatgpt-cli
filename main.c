@@ -9,6 +9,7 @@
 #include "config.h"
 #include "openai-wrapper.h"
 #include "curl/curl.h"
+#include "version.h"
 
 #define ENV_API_KEY "CHATGPT_CLI_API_KEY"
 
@@ -24,6 +25,7 @@ static void print_help(const char* command_name) {
 	printf("  -i, --instructions TEXT    System instructions for the model (overrides INSTRUCTIONS config option)\n");
 	printf("  -r, --raw                  Print raw JSON response instead of parsed text\n");
 	printf("  -h, --help                 Show this help message and exit\n");
+	printf("  -v, --version              Show program version\n");
 	printf("\n");
 	printf("Environment:\n");
 	printf("  %s  API key if not provided with --key\n", ENV_API_KEY);
@@ -82,11 +84,12 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 		{"instructions", required_argument, 0, 'i'},
 		{"raw", no_argument, 0, 'r'},
 		{"help", no_argument, 0, 'h'},
+		{"version", no_argument, 0, 'v'},
 		{0, 0, 0, 0}
 	};
 
 	int opt; // usually a char, the current option. (with arg optarg)
-	while ((opt = getopt_long(argc, argv, "m:k:i:rh", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "m:k:i:rhv", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'm':
 			func_request->model = strdup(optarg);
@@ -103,6 +106,11 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 		case 'h':
 			openai_request_free(func_request);
 			print_help("chatgpt_cli");
+			exit(EXIT_SUCCESS);
+			break;
+		case 'v':
+			openai_request_free(func_request);
+			printf("chatgpt-cli %s\ncreated by mia <3", PROJECT_VERSION_STRING);
 			exit(EXIT_SUCCESS);
 			break;
 		}
