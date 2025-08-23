@@ -41,7 +41,7 @@ static void print_help(const char* command_name) {
 	}
 }
 
-void callbacktest(const char* delta, const size_t length, void* user_data) {
+static void openai_stream_callback_print(const char* delta, const size_t length, void* user_data) {
 	fprintf(stdout, "%.*s", (int)length, delta);
 	fflush(stdout);
 }
@@ -49,13 +49,15 @@ void callbacktest(const char* delta, const size_t length, void* user_data) {
 int main(int argc, char* argv[]) {
 	openai_request* request = openai_generate_request_from_options(argc, argv);
 
-	char* error = openai_stream_response(request, callbacktest, 0);
+	char* error = openai_stream_response(request, openai_stream_callback_print, 0);
 	if (error != NULL) {
 		printf("Error: %s", error);
 		exit(EXIT_FAILURE);
 	}
 
 	openai_request_free(request);
+
+	return 0;
 }
 
 

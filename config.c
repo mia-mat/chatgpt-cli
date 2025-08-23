@@ -53,6 +53,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 	}
 
 	// formatted as KEY=VALUE pairs on lines, with | to go onto next line
+	// if a line starts with '#' and isn't inside a value, consider it as a comment.
 
 	fseek(config_file, 0, SEEK_END);
 	size_t file_length = ftell(config_file);
@@ -76,9 +77,10 @@ char* chatgpt_cli_config_read_value(const char* key) {
 
 	bool equals_seen = false; // has an = been seen on the current line (are we writing to key or value)
 	bool key_found = false; // if the current value is being assigned to the key which we want to read from
+	bool skip_line = false; // if the line is a comment line
 
 	for (int i = 0; i < file_length; i++) {
-		char current_char = config_content[i];
+		const char current_char = config_content[i];
 		if (current_char == '\r') continue;
 
 		if (current_char == '\n') {
@@ -90,7 +92,16 @@ char* chatgpt_cli_config_read_value(const char* key) {
 			current_part_length = 0;
 
 			equals_seen = false;
+			skip_line = false;
 
+			if (file_length > i+1 && config_content[i+1] == '#') {
+				skip_line = true;
+			}
+
+			continue;
+		}
+
+		if (skip_line) {
 			continue;
 		}
 

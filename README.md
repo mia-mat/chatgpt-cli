@@ -6,14 +6,19 @@
 
 Default settings may be read from a configuration file:
 
-* **Linux/macOS:** `~/.config/chatgpt-cli.conf`
+* **Linux:** `~/.config/chatgpt-cli.conf`
 * **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\config`
 
-Format the file with `KEY=VALUE` pairs (use `|` to escape newlines in values):
+Format the file with `KEY=VALUE` pairs.  
+You may use `|` to escape newlines in values,  
+and `#` at the start of a line to denote a comment.  
+Empty lines are ignored.
 
 ```
-MODEL=gpt-5-mini
-INSTRUCTIONS=You are a helpful assistant.|
+model=gpt-5-mini
+
+# Here is a comment!
+instructions=You are a helpful assistant.|
 Respond concisely.
 ```
 
@@ -35,5 +40,5 @@ Respond concisely.
 ### Optional Options
 
 * `-i, --instructions TEXT` – System instructions for the model (overrides config)
-* `-r, --raw` – Print raw JSON response instead of parsed text
+* `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
 * `-h, --help` – Show help message
