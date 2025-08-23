@@ -5,6 +5,7 @@
 #ifndef CHATGPT_CLI_OPENAI_WRAPPER_H
 #define CHATGPT_CLI_OPENAI_WRAPPER_H
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef struct {
 	char* instructions;
@@ -14,16 +15,11 @@ typedef struct {
 	bool raw;
 } openai_request;
 
-typedef struct {
-	char* raw_response;
-	char* output_text;
-	char* error;
-} openai_response;
-
 void openai_request_free(openai_request* request);
-void openai_response_free(openai_response* response);
 
-openai_response* openai_create_response_object(const char* curl_response);
+typedef void (*openai_delta_callback)(const char* delta, size_t length, void* user_data);
 
-openai_response* openai_generate_response(openai_request* request);
+// stream response deltas into a callback, returns NULL if successful, or an error if one occurred (caller frees).
+char* openai_stream_response(openai_request* request, openai_delta_callback callback, void* user_data);
+
 #endif //CHATGPT_CLI_OPENAI_WRAPPER_H

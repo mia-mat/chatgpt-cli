@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <json-c/json_tokener.h>
 
 #include "config.h"
 #include "openai-wrapper.h"
@@ -40,31 +41,21 @@ static void print_help(const char* command_name) {
 	}
 }
 
+void callbacktest(const char* delta, const size_t length, void* user_data) {
+	fprintf(stdout, "%.*s", (int)length, delta);
+	fflush(stdout);
+}
+
 int main(int argc, char* argv[]) {
 	openai_request* request = openai_generate_request_from_options(argc, argv);
 
-	openai_response* response = openai_generate_response(request);
-
-	if (response->error != NULL) {
-		printf("Error: %s\n", response->error);
-		free(response);
+	char* error = openai_stream_response(request, callbacktest, 0);
+	if (error != NULL) {
+		printf("Error: %s", error);
 		exit(EXIT_FAILURE);
 	}
 
-	char* console_response;
-
-	if (request->raw) {
-		console_response = response->raw_response;
-	} else {
-		console_response = response->output_text;
-	}
-
-	printf("%s\n", console_response);
-
 	openai_request_free(request);
-	openai_response_free(response);
-
-	return 0;
 }
 
 
@@ -79,6 +70,7 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 	// fine if NULL
 	func_request->model = chatgpt_cli_config_read_value("model");
 	func_request->instructions = chatgpt_cli_config_read_value("instructions");
+	func_request->raw = false;
 
 	char* prompt = strdup("");
 

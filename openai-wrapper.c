@@ -8,6 +8,8 @@
 #include <json-c/json.h>
 #include <string.h>
 
+#define OPENAI_RESPONSES_API_URL "https://api.openai.com/v1/responses"
+
 void openai_request_free(openai_request* request) {
 	free(request->api_key);
 	free(request->input);
@@ -16,55 +18,187 @@ void openai_request_free(openai_request* request) {
 	free(request);
 }
 
-void openai_response_free(openai_response* response) {
-	free(response->error);
-	free(response->output_text);
-	free(response);
-}
+typedef struct {
+	openai_delta_callback callback; // pointer to a caller defined function
+	void* user_data;
+	char* error; // NULL if no error
 
-// returns num. bytes handled
-static size_t write_callback(const char* content_ptr, size_t size_atomic, size_t n_elements, char** data) {
-	size_t chunk_size = size_atomic * n_elements;
+	openai_request* request;
 
-	// data holds the address of our char* data
-	// so dereference for char*
-	*data = realloc(*data, strlen(*data) + chunk_size + 1); // +1 for null-terminator
-	if (*data == NULL) {
-		fprintf(stderr, "Memory allocation failed!\n");
-		exit(EXIT_FAILURE);
+	// chunks sent back aren't guaranteed to contain a full response so store unfinished here
+	char* current_event_buffer;
+	size_t current_event_buffer_length;
+} curl_callback_stream_callback_data; // to pass as data into the CURL callback
+
+static json_object* curl_callback_openai_stream_extract_data_json(json_tokener* tok, const char* event_name_end,
+                                                                  const char* event_end,
+                                                                  curl_callback_stream_callback_data* callback_data) {
+	const char* json_prefix = "data: "; // after event_name_end and before the JSON
+	const char* json_string = strstr(event_name_end + strlen(json_prefix) + 1, "{");
+	const size_t json_string_length = event_end - json_string;
+
+	json_tokener_reset(tok);
+	json_object* data_json = json_tokener_parse_ex(tok, json_string, (int)json_string_length);
+
+	if (data_json == NULL) {
+		fprintf(stderr, "JSON parse error: %s\n", json_tokener_error_desc(json_tokener_get_error(tok)));
+		json_tokener_free(tok);
+		callback_data->error = strdup("Malformed response (JSON)");
+		return NULL;
 	}
 
-	strncat(*data, content_ptr, chunk_size);
-
-	return chunk_size;
+	return data_json;
 }
 
-openai_response* openai_generate_response(openai_request* request) {
-	// only used if CURL errors before we properly generate a response
-	openai_response* fallback_response = malloc(sizeof(openai_response));
-	fallback_response->output_text = NULL;
-	fallback_response->raw_response = NULL;
+// returns number of bytes handled, as specified in CURL docs
+static size_t curl_callback_openai_stream_response(const char* content_ptr, const size_t size_atomic,
+                                                   const size_t n_elements,
+                                                   curl_callback_stream_callback_data** user_callback_addr) {
+	const size_t total_chunk_size = size_atomic * n_elements; // = length of content_ptr
+	curl_callback_stream_callback_data* callback_data = *user_callback_addr;
 
+	// don't process further if we've already seen an error
+	if (callback_data->error != NULL) {
+		return total_chunk_size;
+	}
+
+	json_tokener* tok = json_tokener_new();
+
+	// if OpenAI immediately errors, it just returns a full JSON object, check for this:
+	json_object* potential_error = json_tokener_parse_ex(tok, content_ptr, (int)total_chunk_size);
+	if (potential_error != NULL) {
+		const json_object* error_json = json_object_object_get(potential_error, "error");
+		if (error_json != NULL) {
+			callback_data->error =
+				strdup(strdup(json_object_get_string(json_object_object_get(error_json, "message"))));
+			json_object_put(potential_error);
+			return 0;
+		}
+	}
+
+	// copy new chunk onto buffer
+	const size_t new_event_length = callback_data->current_event_buffer_length + total_chunk_size;
+	char* new_event_buffer = realloc(callback_data->current_event_buffer, new_event_length);
+	if (!new_event_buffer) {
+		callback_data->error = strdup("Failed to allocate memory for delta");
+		return 0;
+	}
+	callback_data->current_event_buffer = new_event_buffer;
+	memcpy(callback_data->current_event_buffer + callback_data->current_event_buffer_length, // append to end
+	       content_ptr, total_chunk_size);
+	callback_data->current_event_buffer_length = callback_data->current_event_buffer_length + total_chunk_size;
+
+	// complete events are formatted:
+	// event: whatever.event\ndata: {some json object}\n\n
+	// any \n's etc. inside of the json are escaped which makes parsing much easier
+	// i.e. delimiting by \n\n should be safe.
+
+	char* next_event_start = callback_data->current_event_buffer;
+	while (true) {
+		char* event_end = strstr(next_event_start, "\n\n");
+		if (!event_end) break; // event isn't complete, split and wait for new chunks to finish it
+
+		// get event type
+		char* event_name_start = strstr(next_event_start, "event: ") + strlen("event: ");
+		char* event_name_end = strstr(next_event_start, "\n");
+		if (!event_name_start || !event_name_end || event_name_end < event_name_start) {
+			callback_data->error = strdup("Malformed response");
+			return 0;
+		}
+		size_t event_name_length = (event_name_end) - (event_name_start);
+
+		// strlen etc. on this gets optimized by any decent compiler
+		const char* delta_event = "response.output_text.delta";
+		const char* completed_event = "response.completed";
+
+		if (!callback_data->request->raw && // don't pass deltas to raw responses, we just pass the final full output
+			strlen(delta_event) == event_name_length &&
+			strncmp(delta_event, event_name_start, strlen(delta_event)) == 0) {
+			// extract delta
+			json_object* data_json = curl_callback_openai_stream_extract_data_json(
+				tok, event_name_end, event_end, callback_data);
+			if (data_json == NULL) {
+				return 0;
+			}
+
+			json_object* delta_json = json_object_object_get(data_json, "delta");
+
+			callback_data->callback(strdup(json_object_get_string(delta_json)), json_object_get_string_len(delta_json),
+			                        callback_data->user_data);
+
+			json_object_put(data_json);
+		}
+
+		// the completed event is only sent once at the end, just 'stream' back the whole json here instead of in deltas
+		// if raw is requested
+		if (callback_data->request->raw &&
+			strlen(completed_event) == event_name_length &&
+			strncmp(completed_event, event_name_start, strlen(completed_event)) == 0) {
+			json_object* data_json = curl_callback_openai_stream_extract_data_json(
+				tok, event_name_end, event_end, callback_data);
+			if (data_json == NULL) {
+				return 0;
+			}
+
+			json_object* response_json = json_object_object_get(data_json, "response");
+			const char* response = json_object_to_json_string_ext(response_json, JSON_C_TO_STRING_PRETTY);
+			callback_data->callback(strdup(response), strlen(response),
+			                        callback_data->user_data);
+
+			json_object_put(data_json);
+		}
+
+
+		next_event_start = event_end + 2;
+	}
+	json_tokener_free(tok);
+
+	// update buffer to remove processed events
+
+	if (next_event_start >= callback_data->current_event_buffer + callback_data->current_event_buffer_length) {
+		// there's nothing else in the buffer -> free it
+		free(callback_data->current_event_buffer);
+		callback_data->current_event_buffer = NULL;
+		callback_data->current_event_buffer_length = 0;
+		return total_chunk_size;
+	}
+
+	// unprocessed data remains, move it to the start of the buffer:
+
+	// size_t is unsigned so not safe to do this before the comparison in the proceeding if
+	const size_t leftover_length = callback_data->current_event_buffer + callback_data->current_event_buffer_length - next_event_start;
+
+	memmove(callback_data->current_event_buffer, next_event_start, leftover_length);
+	callback_data->current_event_buffer_length = leftover_length;
+
+	return total_chunk_size;
+}
+
+
+char* openai_stream_response(openai_request* request, openai_delta_callback callback, void* user_data) {
 	CURL* curl = curl_easy_init();
 	if (!curl) {
-		fallback_response->error = strdup("Could not initialize CURL");
-		return fallback_response;
+		return strdup("Could not initialize CURL");
 	}
 
-	curl_easy_setopt(curl, CURLOPT_URL, "https://api.openai.com/v1/responses");
+	curl_easy_setopt(curl, CURLOPT_URL, OPENAI_RESPONSES_API_URL);
 
-	struct curl_slist* list = NULL;
-	list = curl_slist_append(list, "Content-Type: application/json");
+	// set CURL request headers
+	struct curl_slist* header_list = NULL;
+	header_list = curl_slist_append(header_list, "Content-Type: application/json");
 
-	char* auth_prefix = "Authorization: Bearer ";
+	const char* auth_prefix = "Authorization: Bearer ";
 	char* auth_header = malloc(1 + strlen(auth_prefix) + strlen(request->api_key));
 	strcpy(auth_header, auth_prefix);
 	strcat(auth_header, request->api_key);
-	list = curl_slist_append(list, auth_header);
+	header_list = curl_slist_append(header_list, auth_header);
 
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
 
+	// set CURL request content
 	json_object* json_request_data = json_object_new_object();
+
+	json_object_object_add(json_request_data, "stream", json_object_new_boolean(true));
 
 	json_object_object_add(json_request_data, "model", json_object_new_string(request->model));
 	json_object_object_add(json_request_data, "input", json_object_new_string(request->input));
@@ -74,99 +208,44 @@ openai_response* openai_generate_response(openai_request* request) {
 
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string(json_request_data));
 
-	char* response_string = malloc(1);
-	response_string[0] = '\0';
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
-	// copy of pointer is given, so just pass address in to get actual reference
+	curl_callback_stream_callback_data* curl_callback_data = malloc(sizeof(curl_callback_stream_callback_data));
+	curl_callback_data->callback = callback;
+	curl_callback_data->user_data = user_data;
+	curl_callback_data->error = NULL;
+	curl_callback_data->current_event_buffer = NULL;
+	curl_callback_data->current_event_buffer_length = 0;
+	curl_callback_data->request = request;
 
-	CURLcode curl_response = curl_easy_perform(curl);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback_openai_stream_response);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &curl_callback_data);
+	// copy of pointer is passed through, so just pass address in to get actual reference
 
-	curl_slist_free_all(list);
+	const CURLcode curl_response = curl_easy_perform(curl);
+
+
+	// duplicate to be able to free curl_callback_data
+	char* potential_error = NULL;
+	if (curl_callback_data->error != NULL) {
+		potential_error = strdup(curl_callback_data->error);
+	}
+
+	// finalize
+	curl_slist_free_all(header_list);
 	free(auth_header);
+	free(curl_callback_data->error);
+	free(curl_callback_data->current_event_buffer);
+	free(curl_callback_data);
 	json_object_put(json_request_data);
 
+	if (potential_error != NULL) {
+		return potential_error;
+	}
+
 	if (curl_response != CURLE_OK) {
-		fallback_response->error = strdup(curl_easy_strerror(curl_response));
-		return fallback_response;
+		return strdup(curl_easy_strerror(curl_response));
 	}
 
 	curl_easy_cleanup(curl);
 
-	return openai_create_response_object(response_string);
-}
-
-openai_response* openai_create_response_object(const char* curl_response) {
-	openai_response* func_response = malloc(sizeof(openai_response));
-	func_response->raw_response = strdup(curl_response);
-	func_response->error = NULL;
-	func_response->output_text = NULL;
-
-	json_object* response_json = json_tokener_parse(curl_response);
-	// response_json *should be* structured as
-	// master object -> "output" array [i]-> "content" array [j]-> "text" string
-	// where i has type "message"
-	// and j has type "output_text"
-
-	// check for any errors first
-	json_object* error = json_object_object_get(response_json, "error");
-	if (error != NULL) {
-		func_response->error = strdup(json_object_get_string(json_object_object_get(error, "message")));
-		json_object_put(response_json);
-		return func_response;
-	}
-
-	const json_object* output_array = json_object_object_get(response_json, "output");
-
-	if (output_array == NULL) {
-		func_response->error = strdup("Malformed JSON response");
-		json_object_put(response_json);
-		return func_response;
-	}
-
-	const json_object* content_array = NULL;
-
-	// loop through output array to find content which is of type 'message'
-	// (i.e. has the actual content we're looking for)
-	for (int i = 0; i < json_object_array_length(output_array); i++) {
-		json_object* output_array_element = json_object_array_get_idx(output_array, i);
-		json_object* type = json_object_object_get(output_array_element, "type");
-
-		if (type == NULL || strcmp(json_object_get_string(type), "message") != 0) {
-			continue;
-		}
-
-		content_array = json_object_object_get(output_array_element, "content");
-	}
-
-	if (content_array == NULL) {
-		func_response->error = strdup("Malformed JSON response");
-		json_object_put(response_json);
-		return func_response;
-	}
-
-	json_object* json_output_text = NULL;
-
-	// loop through content array to find the object with type 'output_text', and hence the output text
-	for (int i = 0; i < json_object_array_length(content_array); i++) {
-		json_object* content_array_element = json_object_array_get_idx(content_array, i);
-		json_object* type = json_object_object_get(content_array_element, "type");
-
-		if (type == NULL || strcmp(json_object_get_string(type), "output_text") != 0) {
-			continue;
-		}
-
-		json_output_text = json_object_object_get(content_array_element, "text");
-	}
-
-	if (json_output_text == NULL) {
-		func_response->error = strdup("Malformed JSON response");
-		json_object_put(response_json);
-		return func_response;
-	}
-
-	func_response->output_text = strdup(json_object_get_string(json_output_text));
-
-	json_object_put(response_json);
-	return func_response;
+	return NULL;
 }
