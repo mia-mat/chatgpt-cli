@@ -77,8 +77,13 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 	// fine if NULL/0
 	func_request->model = chatgpt_cli_config_read_value("model");
 	func_request->instructions = chatgpt_cli_config_read_value("instructions");
-	func_request->max_tokens = strtoul(chatgpt_cli_config_read_value("max_tokens"), NULL, 10);
 	func_request->raw = false;
+
+	// strtoul with NULL input has undefined behaviour
+	const char* config_max_tokens = chatgpt_cli_config_read_value("max_tokens");
+	if (config_max_tokens != NULL) {
+		func_request->max_tokens = strtoul(config_max_tokens, NULL, 10);
+	} else func_request->max_tokens = OPENAI_REQUEST_MAX_TOKENS_NOT_SET;
 
 	// 0 is actually a valid input for temperature, and we're not setting a pointer, so check first,
 	// and just put the value outside the normal range if it doesn't exist
