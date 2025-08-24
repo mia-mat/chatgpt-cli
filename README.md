@@ -32,13 +32,16 @@ Respond concisely.
 ./chatgpt_cli [OPTIONS] PROMPT...
 ```
 
-### Required Options
+### Required
 
-* `-k, --key API_KEY` – OpenAI API key (overrides environment variable)
-* `-m, --model MODEL` – Model to use (overrides config)
+* `-k, --key API_KEY` – OpenAI API key (overrides `OPENAI_API_KEY` environment variable)
+* `-m, --model MODEL` – OpenAI model to use (overrides `model` config option)
 
-### Optional Options
+### Optional
 
-* `-i, --instructions TEXT` – System instructions for the model (overrides config)
+* `-i, --instructions TEXT` – System instructions for the model (overrides `instructions` config option)
+* `-t, --temperature DOUBLE` – Sampling temperature for the model, must be in [0,2] (overrides `temperature` config option)
+* `-T, --max-tokens UINT64` – Upper bound for output tokens in the response (overrides `max-tokens` config option)
 * `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
 * `-h, --help` – Show help message
+* `-v, --version` – Show program version

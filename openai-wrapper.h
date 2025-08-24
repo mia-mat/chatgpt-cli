@@ -7,8 +7,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// some value outside valid interval: [0,2]
+#define OPENAI_REQUEST_TEMPERATURE_NOT_SET -1
+
+#define OPENAI_REQUEST_MAX_TOKENS_NOT_SET 0
+
 typedef struct {
 	char* instructions;
+	double temperature;
+	size_t max_tokens;
 	char* input;
 	char* model;
 	char* api_key;

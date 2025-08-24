@@ -70,7 +70,7 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 		const json_object* error_json = json_object_object_get(potential_error, "error");
 		if (error_json != NULL) {
 			callback_data->error =
-				strdup(strdup(json_object_get_string(json_object_object_get(error_json, "message"))));
+				strdup(json_object_get_string(json_object_object_get(error_json, "message")));
 			json_object_put(potential_error);
 			return 0;
 		}
@@ -107,13 +107,13 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 		}
 		size_t event_name_length = (event_name_end) - (event_name_start);
 
-		// strlen etc. on this gets optimized by any decent compiler
-		const char* delta_event = "response.output_text.delta";
-		const char* completed_event = "response.completed";
+		// refer to https://platform.openai.com/docs/api-reference/responses_streaming/response for event details
+		#define IS_EVENT(ev) \
+		(strlen(ev) == event_name_length && \
+		strncmp(ev, event_name_start, strlen(ev)) == 0)
 
 		if (!callback_data->request->raw && // don't pass deltas to raw responses, we just pass the final full output
-			strlen(delta_event) == event_name_length &&
-			strncmp(delta_event, event_name_start, strlen(delta_event)) == 0) {
+			IS_EVENT("response.output_text.delta")) {
 			// extract delta
 			json_object* data_json = curl_callback_openai_stream_extract_data_json(
 				tok, event_name_end, event_end, callback_data);
@@ -129,11 +129,10 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 			json_object_put(data_json);
 		}
 
-		// the completed event is only sent once at the end, just 'stream' back the whole json here instead of in deltas
+		// the final event is only sent once at the end, just 'stream' back the whole json here instead of in deltas
 		// if raw is requested
 		if (callback_data->request->raw &&
-			strlen(completed_event) == event_name_length &&
-			strncmp(completed_event, event_name_start, strlen(completed_event)) == 0) {
+			(IS_EVENT("response.completed") || IS_EVENT("response.incomplete") || IS_EVENT("response.failed"))) {
 			json_object* data_json = curl_callback_openai_stream_extract_data_json(
 				tok, event_name_end, event_end, callback_data);
 			if (data_json == NULL) {
@@ -166,7 +165,8 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 	// unprocessed data remains, move it to the start of the buffer:
 
 	// size_t is unsigned so not safe to do this before the comparison in the proceeding if
-	const size_t leftover_length = callback_data->current_event_buffer + callback_data->current_event_buffer_length - next_event_start;
+	const size_t leftover_length = callback_data->current_event_buffer + callback_data->current_event_buffer_length -
+		next_event_start;
 
 	memmove(callback_data->current_event_buffer, next_event_start, leftover_length);
 	callback_data->current_event_buffer_length = leftover_length;
@@ -205,6 +205,13 @@ char* openai_stream_response(openai_request* request, openai_delta_callback call
 	if (request->instructions != NULL) {
 		json_object_object_add(json_request_data, "instructions", json_object_new_string(request->instructions));
 	}
+	if (request->temperature != OPENAI_REQUEST_TEMPERATURE_NOT_SET) {
+		json_object_object_add(json_request_data, "temperature", json_object_new_double(request->temperature));
+	}
+	if (request->max_tokens != OPENAI_REQUEST_MAX_TOKENS_NOT_SET) {
+		json_object_object_add(json_request_data, "max_output_tokens", json_object_new_uint64(request->max_tokens));
+	}
+
 
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string(json_request_data));
 
@@ -231,6 +238,7 @@ char* openai_stream_response(openai_request* request, openai_delta_callback call
 
 	// finalize
 	curl_slist_free_all(header_list);
+	memset(auth_header, 0, strlen(auth_header)); // let's not let an API key sit in memory
 	free(auth_header);
 	free(curl_callback_data->error);
 	free(curl_callback_data->current_event_buffer);
