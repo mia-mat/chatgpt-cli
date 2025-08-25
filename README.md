@@ -39,13 +39,13 @@ Respond concisely.
 
 ### Optional
 
-* `-h, --help` – Show help message  
-* `-v, --version` – Show program version  
-<br> 
+* `-h, --help` – Show help message
+* `-v, --version` – Show program version<br><br>
+
 * `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
-* `-R, --response-id` – Print the response id after completion (use with -H later)  
-<br>
-* `-H, --history [ID]` –Specify an OpenAI previous_response_id (defaults to last response's id)  
+* `-R, --response-id` – Print the response id after completion (use with -H later)<br><br>
+
+* `-H, --history [ID]` –Specify an OpenAI previous_response_id (defaults to last response's id)
 
 * `-i, --instructions TEXT` – System instructions for the model (overrides `instructions` config option)
 * `-t, --temperature DOUBLE` – Sampling temperature for the model, must be in [0,2] (overrides `temperature` config option)
