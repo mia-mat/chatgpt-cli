@@ -15,7 +15,9 @@ add_executable(chatgpt_cli main.c
         openai-wrapper.h
         config.c
         config.h
-        version.h)
+        version.h
+        history.c
+        history.h)
 target_link_libraries(chatgpt_cli PRIVATE
         CURL::libcurl
         ${JSONC_LIB})

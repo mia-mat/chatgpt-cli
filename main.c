@@ -7,6 +7,7 @@
 #include <json-c/json_tokener.h>
 
 #include "config.h"
+#include "history.h"
 #include "openai-wrapper.h"
 #include "curl/curl.h"
 #include "version.h"
@@ -22,6 +23,8 @@ static void print_help() {
 	printf("  -m, --model MODEL          OpenAI model to use (overrides 'model' config option)\n");
 	printf("\n");
 	printf("Optional:\n");
+	printf("  -H, --history [ID]         Specify an OpenAI previous_response_id (default is last output)\n");
+	printf("  -R, --response-id          Print the response id after completion (use with -H later)\n");
 	printf("  -i, --instructions TEXT    System instructions for the model (overrides 'instructions' config option)\n");
 	printf("  -t, --temperature DOUBLE   Sampling temperature for the model, must be in [0,2] (overrides 'temperature' config option)\n");
 	printf("  -T, --max-tokens UINT64    Upper bound for output tokens in the response (overrides 'max-tokens' config option)\n");
@@ -33,7 +36,7 @@ static void print_help() {
 	printf("  %s  API key if not provided with --key\n", ENV_API_KEY);
 	printf("\n");
 
-	char* config_path = chatgpt_cli_config_get_path();
+	char* config_path = chatgpt_cli_config_get_config_path();
 	if (config_path) {
 		printf("Configuration:\n");
 		printf("  %s\n", config_path);
@@ -78,6 +81,8 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 	func_request->model = chatgpt_cli_config_read_value("model");
 	func_request->instructions = chatgpt_cli_config_read_value("instructions");
 	func_request->raw = false;
+	func_request->echo_response_id = false;
+	func_request->previous_response_id = NULL;
 
 	// strtoul with NULL input has undefined behaviour
 	const char* config_max_tokens = chatgpt_cli_config_read_value("max_tokens");
@@ -103,11 +108,13 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 		{"raw", no_argument, 0, 'r'},
 		{"help", no_argument, 0, 'h'},
 		{"version", no_argument, 0, 'v'},
+		{"history", optional_argument, 0, 'H'},
+		{"response-id", no_argument, 0, 'R'},
 		{0, 0, 0, 0}
 	};
 
 	int opt; // usually a char, the current option. (with arg optarg)
-	while ((opt = getopt_long(argc, argv, "m:k:i:t:T:rhv", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "m:k:i:t:T:rRhvH::", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'm':
 			func_request->model = strdup(optarg);
@@ -140,10 +147,20 @@ openai_request* openai_generate_request_from_options(int argc, char* argv[]) {
 			printf("%s %s\ncreated by mia <3\n", CHATGPT_CLI_PROGRAM_NAME, CHATGPT_CLI_VERSION);
 			exit(EXIT_SUCCESS);
 			break;
+		case 'H':
+			if (!optarg) {
+				func_request->previous_response_id = chatgpt_cli_history_get_previous_response_id();
+			} else {
+				func_request->previous_response_id = optarg;
+			}
+			break;
+		case 'R':
+			func_request->echo_response_id = true;
+			break;
 		}
 	}
 	if (!func_request->model) {
-		char* config_path = chatgpt_cli_config_get_path();
+		char* config_path = chatgpt_cli_config_get_config_path();
 		fprintf(stderr, "Model not provided. Specify with --model or in %s\n", config_path);
 		free(config_path);
 		free(func_request);

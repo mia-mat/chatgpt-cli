@@ -39,9 +39,11 @@ Respond concisely.
 
 ### Optional
 
+* `-H, --history [ID]` –Specify an OpenAI previous_response_id (default is last output)
 * `-i, --instructions TEXT` – System instructions for the model (overrides `instructions` config option)
 * `-t, --temperature DOUBLE` – Sampling temperature for the model, must be in [0,2] (overrides `temperature` config option)
 * `-T, --max-tokens UINT64` – Upper bound for output tokens in the response (overrides `max-tokens` config option)
 * `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
+* `-R, --response-id` – Print the response id after completion (use with -H later)
 * `-h, --help` – Show help message
 * `-v, --version` – Show program version

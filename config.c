@@ -9,17 +9,17 @@
 #include <string.h>
 #include <stdio.h>
 
-char* chatgpt_cli_config_get_path() {
+char* chatgpt_cli_config_get_app_folder() {
 	char* path = NULL;
 
 #ifdef _WIN32 // C:\Users\user\Appdata\Local\chatgpt-cli\config
 	char* user = getenv("USERPROFILE");
 	if (!user) {
-		fprintf(stderr, "Could not find config save location");
+		fprintf(stderr, "Could not find save location");
 		exit(1);
 	}
 
-	const char* subdir = "\\AppData\\Local\\chatgpt-cli\\config";
+	const char* subdir = "\\AppData\\Local\\chatgpt-cli\\";
 	size_t len = strlen(user) + strlen(subdir) + 1;
 	path = malloc(len);
 	snprintf(path, len, "%s%s", user, subdir);
@@ -28,11 +28,11 @@ char* chatgpt_cli_config_get_path() {
 	// ~/.config/chatgpt-cli.conf
 	char* home = getenv("HOME");
 	if (!home) {
-		fprintf(stderr, "Could not find config save location");
+		fprintf(stderr, "Could not find save location");
 		exit(1);
 	}
 
-	const char* subdir = "/.config/chatgpt-cli.conf";
+	const char* subdir = "/.config/";
 	size_t len = strlen(home) + strlen(subdir) + 1;
 	path = malloc(len);
 	snprintf(path, len, "%s%s", home, subdir);
@@ -42,8 +42,19 @@ char* chatgpt_cli_config_get_path() {
 	return path;
 }
 
+char* chatgpt_cli_config_get_config_path() {
+	char* app_path = chatgpt_cli_config_get_app_folder();
+	const char* config_file_name = ".config";
+	const size_t len = strlen(app_path) + strlen(config_file_name) + 2; // 2 for path separator and \0
+
+	char* path = malloc(len);
+	snprintf(path, len, "%s%c%s", app_path, PATH_SEPARATOR, config_file_name);
+	free(app_path);
+	return path;
+}
+
 char* chatgpt_cli_config_read_value(const char* key) {
-	char* config_path = chatgpt_cli_config_get_path();
+	char* config_path = chatgpt_cli_config_get_config_path();
 
 	FILE* config_file = fopen(config_path, "rb");
 	free(config_path);
