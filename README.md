@@ -6,8 +6,8 @@
 
 Default settings may be read from a configuration file:
 
-* **Linux:** `~/.config/chatgpt-cli.conf`
-* **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\config`
+* **Linux:** `~/.chatgpt-cli/.config`
+* **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\.config`
 
 Format the file with `KEY=VALUE` pairs.  
 You may use `|` to escape newlines in values,  
