@@ -6,11 +6,11 @@
 
 Default settings may be read from a configuration file:
 
-* **Linux:** `~/.config/chatgpt-cli.conf`
-* **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\config`
+* **Linux:** `~/.chatgpt-cli/.config`
+* **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\.config`
 
 Format the file with `KEY=VALUE` pairs.  
-You may use `|` to escape newlines in values,  
+You may use `\` to escape newlines in values,  
 and `#` at the start of a line to denote a comment.  
 Empty lines are ignored.
 
@@ -18,7 +18,7 @@ Empty lines are ignored.
 model=gpt-5-mini
 
 # Here is a comment!
-instructions=You are a helpful assistant.|
+instructions=You are a helpful assistant. \ 
 Respond concisely.
 ```
 
@@ -39,9 +39,18 @@ Respond concisely.
 
 ### Optional
 
+* `-h, --help` – Show help message  
+* `-v, --version` – Show program version  
+<br> 
+* `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
+* `-R, --response-id` – Print the response id after completion (use with -H later)  
+<br>
+* `-H, --history [ID]` –Specify an OpenAI previous_response_id (defaults to last response's id)  
+
 * `-i, --instructions TEXT` – System instructions for the model (overrides `instructions` config option)
 * `-t, --temperature DOUBLE` – Sampling temperature for the model, must be in [0,2] (overrides `temperature` config option)
 * `-T, --max-tokens UINT64` – Upper bound for output tokens in the response (overrides `max-tokens` config option)
-* `-r, --raw` – Print raw JSON response instead of parsed text (does not support streaming)
-* `-h, --help` – Show help message
-* `-v, --version` – Show program version
+
+
+
+

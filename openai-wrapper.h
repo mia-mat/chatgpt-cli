@@ -19,7 +19,9 @@ typedef struct {
 	char* input;
 	char* model;
 	char* api_key;
+	char* previous_response_id;
 	bool raw;
+	bool echo_response_id;
 } openai_request;
 
 void openai_request_free(openai_request* request);

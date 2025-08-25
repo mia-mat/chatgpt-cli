@@ -8,6 +8,8 @@
 #include <json-c/json.h>
 #include <string.h>
 
+#include "history.h"
+
 #define OPENAI_RESPONSES_API_URL "https://api.openai.com/v1/responses"
 
 void openai_request_free(openai_request* request) {
@@ -15,6 +17,7 @@ void openai_request_free(openai_request* request) {
 	free(request->input);
 	free(request->model);
 	free(request->instructions);
+	free(request->previous_response_id);
 	free(request);
 }
 
@@ -105,12 +108,25 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 			callback_data->error = strdup("Malformed response");
 			return 0;
 		}
-		size_t event_name_length = (event_name_end) - (event_name_start);
+		const size_t event_name_length = (event_name_end) - (event_name_start);
 
 		// refer to https://platform.openai.com/docs/api-reference/responses_streaming/response for event details
 		#define IS_EVENT(ev) \
-		(strlen(ev) == event_name_length && \
-		strncmp(ev, event_name_start, strlen(ev)) == 0)
+			(strlen(ev) == event_name_length && \
+			strncmp(ev, event_name_start, strlen(ev)) == 0)
+
+		if (callback_data->request->echo_response_id
+			&& !(callback_data->request->raw) && IS_EVENT("response.created")) {
+			json_object* data_json = curl_callback_openai_stream_extract_data_json(tok, event_name_end, event_end, callback_data);
+			if (data_json == NULL) {
+				return 0;
+			}
+
+			json_object* response_json = json_object_object_get(data_json, "response");
+
+			printf("# Response ID: %s\n", json_object_get_string(json_object_object_get(response_json, "id")));
+			json_object_put(data_json);
+		}
 
 		if (!callback_data->request->raw && // don't pass deltas to raw responses, we just pass the final full output
 			IS_EVENT("response.output_text.delta")) {
@@ -130,9 +146,7 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 		}
 
 		// the final event is only sent once at the end, just 'stream' back the whole json here instead of in deltas
-		// if raw is requested
-		if (callback_data->request->raw &&
-			(IS_EVENT("response.completed") || IS_EVENT("response.incomplete") || IS_EVENT("response.failed"))) {
+		if (IS_EVENT("response.completed") || IS_EVENT("response.incomplete") || IS_EVENT("response.failed")) {
 			json_object* data_json = curl_callback_openai_stream_extract_data_json(
 				tok, event_name_end, event_end, callback_data);
 			if (data_json == NULL) {
@@ -140,15 +154,23 @@ static size_t curl_callback_openai_stream_response(const char* content_ptr, cons
 			}
 
 			json_object* response_json = json_object_object_get(data_json, "response");
-			const char* response = json_object_to_json_string_ext(response_json, JSON_C_TO_STRING_PRETTY);
-			callback_data->callback(strdup(response), strlen(response),
-			                        callback_data->user_data);
+
+			if (callback_data->request->raw) {
+				const char* response = json_object_to_json_string_ext(response_json, JSON_C_TO_STRING_PRETTY);
+				callback_data->callback(strdup(response), strlen(response),
+										callback_data->user_data);
+			}
+
+			char* resp_id = strdup(json_object_get_string(json_object_object_get(response_json, "id")));
+			chatgpt_cli_history_set_previous_response_id(resp_id);
+			free(resp_id);
 
 			json_object_put(data_json);
 		}
 
 
 		next_event_start = event_end + 2;
+		#undef IS_EVENT
 	}
 	json_tokener_free(tok);
 
@@ -199,19 +221,22 @@ char* openai_stream_response(openai_request* request, openai_delta_callback call
 	json_object* json_request_data = json_object_new_object();
 
 	json_object_object_add(json_request_data, "stream", json_object_new_boolean(true));
-
 	json_object_object_add(json_request_data, "model", json_object_new_string(request->model));
 	json_object_object_add(json_request_data, "input", json_object_new_string(request->input));
 	if (request->instructions != NULL) {
 		json_object_object_add(json_request_data, "instructions", json_object_new_string(request->instructions));
 	}
+
+	if (request->previous_response_id != NULL) {
+		json_object_object_add(json_request_data, "previous_response_id", json_object_new_string(request->previous_response_id));
+	}
+
 	if (request->temperature != OPENAI_REQUEST_TEMPERATURE_NOT_SET) {
 		json_object_object_add(json_request_data, "temperature", json_object_new_double(request->temperature));
 	}
 	if (request->max_tokens != OPENAI_REQUEST_MAX_TOKENS_NOT_SET) {
 		json_object_object_add(json_request_data, "max_output_tokens", json_object_new_uint64(request->max_tokens));
 	}
-
 
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string(json_request_data));
 
