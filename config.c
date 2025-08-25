@@ -12,27 +12,26 @@
 char* chatgpt_cli_config_get_app_folder() {
 	char* path = NULL;
 
-#ifdef _WIN32 // C:\Users\user\Appdata\Local\chatgpt-cli\config
+#ifdef _WIN32
 	char* user = getenv("USERPROFILE");
 	if (!user) {
 		fprintf(stderr, "Could not find save location");
 		exit(1);
 	}
 
-	const char* subdir = "\\AppData\\Local\\chatgpt-cli\\";
+	const char* subdir = "\\AppData\\Local\\chatgpt-cli";
 	size_t len = strlen(user) + strlen(subdir) + 1;
 	path = malloc(len);
 	snprintf(path, len, "%s%s", user, subdir);
 
 #else
-	// ~/.config/chatgpt-cli.conf
 	char* home = getenv("HOME");
 	if (!home) {
 		fprintf(stderr, "Could not find save location");
 		exit(1);
 	}
 
-	const char* subdir = "/.config/";
+	const char* subdir = "/.chatgpt-cli";
 	size_t len = strlen(home) + strlen(subdir) + 1;
 	path = malloc(len);
 	snprintf(path, len, "%s%s", home, subdir);
