@@ -62,7 +62,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 		return NULL;
 	}
 
-	// formatted as KEY=VALUE pairs on lines, with | to go onto next line
+	// formatted as KEY=VALUE pairs on lines, with \ to go onto next line
 	// if a line starts with '#' and isn't inside a value, consider it as a comment.
 
 	fseek(config_file, 0, SEEK_END);
@@ -132,7 +132,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 		}
 
 		// input is going onto a new line, continue
-		if (current_char == '|' && equals_seen &&
+		if (current_char == '\\' && equals_seen &&
 			((file_length > i+1 && config_content[i+1] == '\n')
 			|| (file_length > i+2 && config_content[i+1] == '\r' && config_content[i+2] == '\n'))) {
 			i++; // skip newline character

@@ -10,15 +10,15 @@ Default settings may be read from a configuration file:
 * **Windows:** `C:\Users\<username>\AppData\Local\chatgpt-cli\.config`
 
 Format the file with `KEY=VALUE` pairs.  
-You may use `|` to escape newlines in values,  
+You may use `\` to escape newlines in values,  
 and `#` at the start of a line to denote a comment.  
 Empty lines are ignored.
 
 ```
 model=gpt-5-mini
 
-# Here is a comment!
-instructions=You are a helpful assistant.|
+# Here is a comment \
+instructions=You are a helpful assistant. \ 
 Respond concisely.
 ```
 
