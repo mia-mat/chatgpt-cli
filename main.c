@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
 
 	char* error = openai_stream_response(request, openai_stream_callback_print, 0);
 	if (error != NULL) {
-		printf("Error: %s", error);
+		printf("\nError: %s", error);
 		exit(EXIT_FAILURE);
 	}
 	printf("\n");
