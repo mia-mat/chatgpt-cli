@@ -14,6 +14,4 @@ FILE* chatgpt_cli_history_get_previous_response_id_file(const char* mode);
 
 char* chatgpt_cli_history_get_previous_response_id();
 void chatgpt_cli_history_set_previous_response_id(const char* id);
-
-void r_mkdir(char* path);
 #endif //HISTORY_H
