@@ -148,7 +148,7 @@ char* chatgpt_cli_config_read_value(const char* key) {
 
 		char* new_current_part = realloc(current_part, current_part_length+2);
 		if (new_current_part == NULL) {
-			fprintf(stderr, "Memory allocation failed!\n");
+			fprintf(stderr, "\nMemory allocation failed!\n");
 			free(current_part);
 			exit(EXIT_FAILURE);
 		}

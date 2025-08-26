@@ -44,7 +44,7 @@ static json_object* curl_callback_openai_stream_extract_data_json(json_tokener* 
 	json_object* data_json = json_tokener_parse_ex(tok, json_string, (int)json_string_length);
 
 	if (data_json == NULL) {
-		fprintf(stderr, "JSON parse error: %s\n", json_tokener_error_desc(json_tokener_get_error(tok)));
+		fprintf(stderr, "\nJSON parse error: %s\n", json_tokener_error_desc(json_tokener_get_error(tok)));
 		json_tokener_free(tok);
 		callback_data->error = strdup("Malformed response (JSON)");
 		return NULL;
